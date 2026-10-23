@@ -159,6 +159,13 @@ A jar stays loaded for the whole Stata session: always restart Stata after repla
   failure of 23 Oct 2026: on Windows an open file cannot be deleted or overwritten, so a leaked
   handle would lock the user's raster while Stata runs. The GeoTIFF round-trip test deletes its file
   afterwards to keep proving this on every Windows runner.
+- **Shading rewrites geo's own text too.** The Shade plugin rewrites every string constant in
+  geo.jar that starts like a relocated package (for example "org/apache/commons/" or
+  "org.slf4j."), including strings in geo's own classes. That is what makes reflection-based
+  libraries keep working, but code that must name an ORIGINAL package (diagnostics, checks) has to
+  build the text at run time, e.g. `String.join("/", "org", "apache", "commons")`, because the
+  build tool cannot see it. Found 23 Oct 2026, when the dependency check counted geo's 1,083
+  renamed Commons entries as "unrelocated".
 - **Return codes.** 198 for bad arguments, 5100 (Stata's own code for a Java exception) for
   failures; see `ReturnCodes.java`.
 - **Stata's real constants** (recorded by check_stubs.do, 23 Oct 2026): Data.TYPE_BYTE 1, INT 2,

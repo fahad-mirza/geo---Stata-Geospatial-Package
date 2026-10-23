@@ -35,7 +35,14 @@ import org.fahadmirza.geo.stata.dev.CheckRow.Verdict;
  */
 public final class DependencyCheck {
     private static final String SHADED = "org/fahadmirza/geo/shaded/";
-    private static final String COMMONS = "org/apache/commons/";
+    /**
+     * "org/apache/commons/", built at run time ON PURPOSE. The Shade plugin rewrites every string
+     * constant in geo.jar that looks like a relocated package, including this class's own text, so
+     * a plain literal "org/apache/commons/" would ship as the relocated path and the check below
+     * would count the renamed copies (bug found 23 Oct 2026: 1,083 false "unrelocated" entries).
+     * String.join is not a compile-time constant, so the build tool cannot see or rewrite it.
+     */
+    private static final String COMMONS = String.join("/", "org", "apache", "commons") + "/";
     private static final String GT_SERVICE = "META-INF/services/org.geotools.coverage.grid.io.GridFormatFactorySpi";
     private static final String[] IMAGEN_REGISTRIES = {
         "META-INF/registryFile.imagen", "META-INF/org.eclipse.imagen.registryFile.imagen",
@@ -106,12 +113,16 @@ public final class DependencyCheck {
     private static List<CheckRow> packagingChecks(JarFile jar, File jarFile) {
         List<CheckRow> rows = new ArrayList<>();
         String shadedCommons = null;
+        List<String> shadedClasses = new ArrayList<>();
         int unrelocatedCommons = 0;
         Enumeration<JarEntry> entries = jar.entries();
         while (entries.hasMoreElements()) {
             String n = entries.nextElement().getName();
-            if (shadedCommons == null && n.startsWith(SHADED + COMMONS) && n.endsWith(".class") && !n.contains("$")) {
-                shadedCommons = n;
+            if (n.startsWith(SHADED + COMMONS) && n.endsWith(".class") && !n.contains("$")) {
+                if (shadedCommons == null) {
+                    shadedCommons = n;
+                }
+                shadedClasses.add(n);
             }
             if (n.startsWith(COMMONS)) {
                 unrelocatedCommons++;
@@ -123,19 +134,13 @@ public final class DependencyCheck {
             rows.add(new CheckRow("Packaging", "CHECK", "relocated Apache Commons loads from geo.jar",
                     Verdict.WARN, "no relocated Apache Commons classes in geo.jar, so nothing to test"));
         } else {
-            String cls = toClassName(shadedCommons);
-            rows.add(loadsFrom("Packaging", "relocated Apache Commons loads from geo.jar", cls, jarFile));
-            // 2. Stata's own copy, under the original name, for the record
-            String original = cls.substring((SHADED).replace('/', '.').length());
-            String where;
-            try {
-                Class<?> c = Class.forName(original, false, JavaContext.geoLoader());
-                where = original + " loads from " + location(c);
-            } catch (ClassNotFoundException | LinkageError e) {
-                where = original + " is not provided by Stata (only geo's relocated copy exists)";
-            }
-            rows.add(info("Packaging", "same class under its original name (Stata's copy)", where));
+            rows.add(loadsFrom("Packaging", "relocated Apache Commons loads from geo.jar",
+                    toClassName(shadedCommons), jarFile));
         }
+
+        // 2. Side by side: a class Stata ships under its original name AND geo ships renamed.
+        //    Both must load, each from its own jar (Phase 0 task 5, the round 2 conflict test).
+        rows.add(sideBySide(shadedClasses, jarFile));
 
         // 3. No unrelocated Apache Commons inside geo.jar
         rows.add(new CheckRow("Packaging", "CHECK", "no unrelocated Apache Commons inside geo.jar",
@@ -174,6 +179,38 @@ public final class DependencyCheck {
     }
 
     // ----- helpers -----
+
+    /**
+     * Looks for an Apache Commons class that Stata provides under its original name and geo ships
+     * renamed, and loads both. PASS when both load, each from its own jar.
+     */
+    private static CheckRow sideBySide(List<String> shadedEntries, File jarFile) {
+        String what = "Stata's copy and geo's renamed copy load side by side";
+        int prefix = SHADED.length();
+        for (String entry : shadedEntries) {
+            String original = toClassName(entry.substring(prefix));
+            Class<?> stataCopy;
+            try {
+                stataCopy = Class.forName(original, false, JavaContext.geoLoader());
+            } catch (ClassNotFoundException | LinkageError e) {
+                continue; // Stata does not ship this class; try the next one
+            }
+            String stataLoc = location(stataCopy);
+            if (stataLoc.contains(jarFile.getName())) {
+                return new CheckRow("Packaging", "CHECK", what, Verdict.FAIL, original
+                        + " loads from geo.jar under its ORIGINAL name, so geo's copy is not renamed");
+            }
+            CheckRow ours = loadsFrom("Packaging", what, toClassName(entry), jarFile);
+            if (ours.verdict() != Verdict.PASS) {
+                return ours;
+            }
+            return new CheckRow("Packaging", "CHECK", what, Verdict.PASS, "Stata: " + original
+                    + " from " + stataLoc + " | geo: " + ours.detail());
+        }
+        return new CheckRow("Packaging", "INFO", what, Verdict.INFO, "none of the "
+                + shadedEntries.size() + " Apache Commons classes in geo.jar also exists in Stata's own jars,"
+                + " so there is nothing that could collide");
+    }
 
     private static CheckRow fromProbe(String section, Probe.Result r) {
         return new CheckRow(section, "CHECK", r.name(), r.ok() ? Verdict.PASS : Verdict.FAIL,
