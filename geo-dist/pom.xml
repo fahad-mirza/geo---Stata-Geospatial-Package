@@ -144,6 +144,11 @@
                   <pattern>org.locationtech.jts</pattern>
                   <shadedPattern>${shade.prefix}.org.locationtech.jts</shadedPattern>
                 </relocation>
+                <!-- aircompressor: pure-Java ZSTD decoder used by ImageIO-Ext (Phase 0 task 6) -->
+                <relocation>
+                  <pattern>io.airlift.compress</pattern>
+                  <shadedPattern>${shade.prefix}.io.airlift.compress</shadedPattern>
+                </relocation>
                 <!-- Units-of-measure libraries used by GeoTools' coordinate systems (pure Java) -->
                 <relocation>
                   <pattern>javax.measure</pattern>

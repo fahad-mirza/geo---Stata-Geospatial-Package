@@ -204,8 +204,9 @@ public final class DependencyCheck {
             if (ours.verdict() != Verdict.PASS) {
                 return ours;
             }
-            return new CheckRow("Packaging", "CHECK", what, Verdict.PASS, "Stata: " + original
-                    + " from " + stataLoc + " | geo: " + ours.detail());
+            // Kept short: Stata's display wraps lines longer than 255 characters.
+            return new CheckRow("Packaging", "CHECK", what, Verdict.PASS, original + ": Stata's copy from "
+                    + jarName(stataLoc) + ", geo's renamed copy from " + jarFile.getName());
         }
         return new CheckRow("Packaging", "INFO", what, Verdict.INFO, "none of the "
                 + shadedEntries.size() + " Apache Commons classes in geo.jar also exists in Stata's own jars,"
@@ -267,6 +268,12 @@ public final class DependencyCheck {
     private static String location(Class<?> c) {
         var cs = c.getProtectionDomain().getCodeSource();
         return cs == null || cs.getLocation() == null ? "(Java runtime)" : cs.getLocation().toString();
+    }
+
+    /** "file:/C:/Program%20Files/.../libdeps-core.jar" becomes "libdeps-core.jar". */
+    private static String jarName(String location) {
+        int slash = location.lastIndexOf('/');
+        return slash >= 0 && slash < location.length() - 1 ? location.substring(slash + 1) : location;
     }
 
     private static String describeLoader(ClassLoader l) {

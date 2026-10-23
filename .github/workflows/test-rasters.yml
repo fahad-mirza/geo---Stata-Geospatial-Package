@@ -1,0 +1,110 @@
+# test-rasters: Phase 0 task 6. Can geo read GeoTIFFs in every compression real data uses?
+#
+# Job 1 ("make") generates one synthetic 2048 x 2048 raster in 24 variants using GDAL through
+# rasterio: uncompressed, LZW, Deflate, ZSTD, LERC, JPEG, WebP and JPEG XL; with and without
+# predictors; tiles and strips; Cloud-Optimized GeoTIFF and BigTIFF; 8-, 16-, 32- and 64-bit data,
+# NaN as nodata, three-band files. It records an exact checksum for each lossless file in
+# manifest.csv (a variant this GDAL build cannot write is listed as not created) and uploads them
+# as the artifact "test-rasters" for testing in Stata.
+#
+# Job 2 ("read") builds geo.jar and reads every file with it on Windows, macOS and Linux, with
+# 1 thread and all threads. Results appear as a table on the run's summary page. The job fails
+# only if a file decodes to WRONG numbers; a compression geo cannot read is a finding, not a failure.
+#
+# Runs on demand ("Run workflow" button) and when the generator or reading code changes.
+
+name: test-rasters
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/test-rasters.yml'
+      - 'tests/rasters/**'
+      - 'geo-io/**'
+
+permissions:
+  contents: read
+
+jobs:
+  make:
+    name: Generate test GeoTIFFs (GDAL)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6.1.0
+
+      - name: Install rasterio (includes GDAL)
+        shell: bash
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet -r tests/rasters/requirements.txt
+
+      - name: Generate the files
+        shell: bash
+        run: .venv/bin/python tests/rasters/make_test_rasters.py test-rasters
+
+      - name: Show the manifest
+        shell: bash
+        run: |
+          {
+            echo "### Generated test GeoTIFFs"
+            echo
+            echo '```'
+            cat test-rasters/manifest.csv
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat test-rasters/manifest.csv
+
+      - name: Upload the "test-rasters" artifact
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: test-rasters
+          path: test-rasters/
+          if-no-files-found: error
+          retention-days: 30
+
+  read:
+    name: Read with geo.jar / ${{ matrix.label }}
+    needs: make
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, label: Windows x64 }
+          - { os: ubuntu-latest,  label: Linux x64 }
+          - { os: macos-latest,   label: macOS ARM64 }
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6.1.0
+
+      - name: Install Java 21 (Azul Zulu, as bundled with Stata)
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: zulu
+          java-version: '21'
+          cache: maven
+
+      - name: Build geo.jar (tests run in the ci workflow)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: sh ./mvnw --batch-mode --no-transfer-progress -DskipTests package
+
+      - name: Build geo.jar (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\mvnw.cmd --batch-mode --no-transfer-progress -DskipTests package
+
+      - name: Download the test GeoTIFFs
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: test-rasters
+          path: test-rasters
+
+      - name: Read every file with geo.jar (1 thread and all threads)
+        shell: bash
+        run: java -Djava.awt.headless=true -cp geo-dist/target/geo.jar org.fahadmirza.geo.io.RasterCheckMain test-rasters

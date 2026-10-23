@@ -1,0 +1,5 @@
+# Python packages for make_test_rasters.py (installed only on GitHub Actions).
+# rasterio's packages include GDAL (3.12.2 in rasterio 1.5.2), so no system GDAL is needed.
+# Pinned to releases at least two weeks old when chosen (23 Oct 2026).
+rasterio==1.5.2
+numpy==2.5.3

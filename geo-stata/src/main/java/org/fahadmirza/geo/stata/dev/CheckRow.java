@@ -22,10 +22,14 @@ public record CheckRow(String className, String kind, String member, Verdict ver
         return String.join("\t", clean(shortName()), kind, clean(member), verdict.name(), clean(detail));
     }
 
-    /** Class name without the package, for example "Data" or "Missing$Extended". */
+    /**
+     * First column of the report: for Stata API classes the name without the package
+     * ("com.stata.sfi.Data" becomes "Data"); anything else (a section name or a file name such as
+     * "chirps.tif") is kept as it is.
+     */
     public String shortName() {
-        int dot = className.lastIndexOf('.');
-        return dot < 0 ? className : className.substring(dot + 1);
+        String prefix = "com.stata.sfi.";
+        return className.startsWith(prefix) ? className.substring(prefix.length()) : className;
     }
 
     private static String clean(String s) {

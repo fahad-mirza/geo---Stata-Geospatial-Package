@@ -69,6 +69,24 @@ economists and the wider Stata community.
 
 ## Part 2. Repository notes
 
+### Design principle: syntax that feels like Stata (set 23 Oct 2026)
+geo's commands must look and behave like Stata's own, so a Stata user can guess them. Proposed
+conventions, to be fixed when Phase 1 designs the first user-facing subcommands:
+- One dispatcher, subcommands named by what they do: `geo read`, `geo zonal`, `geo extract`,
+  `geo join`, with Stata-style minimal abbreviations shown underlined in the help file.
+- Files come after `using`, in quotes, as in `import delimited` and `merge`:
+  `geo zonal mean using "rainfall.tif", id(district) generate(rain_mean)`.
+- `clear` is required to replace the data in memory and `replace` to overwrite files or existing
+  variables, exactly as `import` and `save` behave; nothing is overwritten silently.
+- New variables through `generate()` or `prefix()`; `[if] [in]` restrict observations; `frame()`
+  sends results to a frame; the same option name means the same thing in every subcommand
+  (`threads()`, `crs()`, `frame()`).
+- Results also saved in `r()` (counts, timings, settings), visible with `return list`.
+- Output in Stata's style (short tables, notes, Stata's colours); errors use Stata's standard
+  return codes and messages (198 invalid syntax, 601 file not found, 110 variable already defined).
+- Help files in standard .sthlp layout (Syntax, Description, Options, Examples, Stored results),
+  with examples that run.
+
 ### The working loop
 1. Claude delivers the whole repository as a zip; extract it into the local clone (not a
    separate folder), replacing files.
@@ -114,6 +132,8 @@ A jar stays loaded for the whole Stata session: always restart Stata after repla
   CI fails if Apache Commons, FontBox or SLF4J appear anywhere in geo.jar under their original names.
 - Never relocated: DuckDB (`org.duckdb`) and H3 (`com.uber.h3core`), because their native code
   finds Java classes by their original names. CI fails if either appears under the prefix.
+- Also relocated from task 6: aircompressor (`io.airlift.compress`, the pure-Java ZSTD decoder
+  ImageIO-Ext uses).
 - Not relocated by decision (see "Decisions"): GeoTools (`org.geotools`), ImageN
   (`org.eclipse.imagen`), ImageIO-Ext (`it.geosolutions`), and HSQLDB (`org.hsqldb`, the engine
   behind GeoTools' EPSG database). Stata bundles none of them.
@@ -177,6 +197,33 @@ windows-latest (x64), windows-11-arm (ARM64), ubuntu-latest (x64), ubuntu-24.04-
 macos-latest (Apple silicon ARM64), macos-15-intel (x64). Java 21 everywhere (what Stata 19
 bundles), plus Java 17 on Windows x64 and Linux x64 (the minimum geo supports). Free and
 unlimited for public repositories.
+
+### Raster formats (Phase 0 task 6)
+- GeoTools 35.2 reads GeoTIFFs through ImageIO-Ext 2.1.4. Its source has decompressors for
+  none, LZW, Deflate (both codes), PackBits, JPEG and **ZSTD** (pure Java, through the
+  aircompressor library), plus the horizontal and floating-point predictors. It has **no LERC
+  decompressor**: LERC files are expected to be reported as "not readable yet", which is the case
+  the roadmap's Phase 2 fallback decoder covers. The test-rasters workflow confirms all of this on
+  real files (`tests/rasters/make_test_rasters.py` writes 24 variants with exact checksums of band
+  1: all main compressions with and without predictors, tiles and strips, COG and BigTIFF, 8- to
+  64-bit data, NaN nodata, three-band files). WebP has no decompressor in ImageIO-Ext either and
+  should be reported as not readable; JPEG XL cannot even be written by the GDAL inside rasterio
+  1.5.2, so it is listed as "not created" (rare in analytic data; not pursued).
+- LERC options (23 Oct 2026, decision pending evidence on how common LERC is in real data):
+  (1, preferred) a pure-Java decode-only port of Esri's Apache-2.0 C++ decoder, including LERC 4's
+  lossless-float method, plugged into ImageIO-Ext through `TIFFImageReadParam.setTIFFDecompressor`
+  (an existing hook; untested), estimated 2-3 weeks, this is the roadmap's Phase 2 fallback decoder;
+  (2) Esri's native library through JNI on six platforms; (3) GDAL plugin, rejected (needs a GDAL
+  install); (4) clear "not readable yet" message only. Esri publishes no Java implementation.
+- Real test files: `tests/stata/get_real_rasters.do` downloads public WorldPop (links verified
+  23 Oct 2026) and CHIRPS files (CHIRPS ships .tif.gz; the folder path follows CHIRPS' standard
+  layout but its server blocks automated checks, so it is unverified) and unpacks them with a
+  `java:` block. VIIRS nighttime lights need an account (Colorado School of Mines EOG, or NASA
+  Earthdata for Black Marble), so they are downloaded by hand.
+- geo reads the TIFF header itself (`TiffTags`), so it can always say what a file is, even when it
+  cannot decode it.
+- Files above 64 million cells are sampled with evenly spaced blocks in the checks (not in real
+  analysis).
 
 ### Decisions
 **23 Oct 2026: GeoTools, ImageN and ImageIO-Ext stay unrelocated** (was proposed amendment 1).

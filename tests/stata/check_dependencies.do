@@ -70,6 +70,41 @@ if !_rc {
     type `"`jardir'/BUILD-INFO.txt"'
 }
 
+* Stale-jar guard: note it when this check last ran on the very same build, which usually means
+* the new artifact was not downloaded or was extracted to a different folder.
+tempname fh
+local thisbuild ""
+capture file open `fh' using `"`jardir'/BUILD-INFO.txt"', read text
+if !_rc {
+    file read `fh' line
+    while r(eof) == 0 {
+        if substr(`"`macval(line)'"', 1, 7) == "commit:" {
+            local thisbuild = strtrim(substr(`"`macval(line)'"', 8, .))
+        }
+        file read `fh' line
+    }
+    file close `fh'
+}
+local lastfile `"`c(tmpdir)'/geo_last_build_check_dependencies.txt"'
+local lastbuild ""
+local lastwhen ""
+capture file open `fh' using `"`lastfile'"', read text
+if !_rc {
+    file read `fh' lastbuild
+    file read `fh' lastwhen
+    file close `fh'
+}
+if "`thisbuild'" != "" & "`thisbuild'" == "`lastbuild'" {
+    display as result _n "NOTE  This check already ran on this same build (commit `thisbuild') on `lastwhen'."
+    display as result "      If you expected a newer build, download geo-jar again from the latest green run"
+    display as result "      and extract it into `jardir', replacing the old files."
+}
+capture file open `fh' using `"`lastfile'"', write text replace
+if !_rc {
+    file write `fh' "`thisbuild'" _n "`c(current_date)' `c(current_time)'" _n
+    file close `fh'
+}
+
 * Put ONLY geo.jar on the ado-path, from a private folder (javacall's jars() searches the ado-path).
 local stage `"`c(tmpdir)'/geo_depcheck"'
 capture mkdir `"`stage'"'
