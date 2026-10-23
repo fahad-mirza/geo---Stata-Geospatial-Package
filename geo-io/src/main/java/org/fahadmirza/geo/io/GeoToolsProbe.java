@@ -62,7 +62,8 @@ public final class GeoToolsProbe {
     /**
      * Writes a 64 x 64 floating-point GeoTIFF into {@code dir}, reads it back through GeoTools'
      * GeoTIFF reader (ImageIO-Ext underneath, ImageN operations on top) and compares all 4,096
-     * values exactly. This exercises the ImageN registry files that shading must keep intact.
+     * values exactly, then deletes the file. This exercises the ImageN registry files that shading
+     * must keep intact, and proves every file handle is released (Windows cannot delete open files).
      */
     public static Probe.Result roundTrip(Path dir) {
         return Probe.run("GeoTIFF write and read back", () -> {
@@ -87,11 +88,12 @@ public final class GeoToolsProbe {
             }
 
             GeoTiffReader reader = new GeoTiffReader(file);
+            GridCoverage2D read = null;
             int mismatches = 0;
             String firstMismatch = "";
             String epsgText;
             try {
-                GridCoverage2D read = reader.read();
+                read = reader.read();
                 RenderedImage img = read.getRenderedImage();
                 if (img.getWidth() != SIZE || img.getHeight() != SIZE) {
                     throw new Probe.Failure("read back " + img.getWidth() + " x " + img.getHeight()
@@ -113,14 +115,23 @@ public final class GeoToolsProbe {
                 Integer epsg = CRS.lookupEpsgCode(read.getCoordinateReferenceSystem(), false);
                 epsgText = epsg == null ? "coordinate system not matched to an EPSG code"
                         : "coordinate system EPSG:" + epsg;
-                read.dispose(true);
             } finally {
+                // Release the image's own file handle first (see Coverages), then the reader's.
+                Coverages.release(read);
                 reader.dispose();
             }
-            long bytes = file.length();
-            Files.deleteIfExists(file.toPath());
             if (mismatches > 0) {
                 throw new Probe.Failure(mismatches + " of " + (SIZE * SIZE) + " values differ;" + firstMismatch);
+            }
+
+            // The file must now be closed. Windows refuses to delete an open file, so deleting it
+            // proves geo released every handle (on Linux and macOS this step always succeeds).
+            long bytes = file.length();
+            try {
+                Files.delete(file.toPath());
+            } catch (java.io.IOException e) {
+                throw new Probe.Failure("all values identical, but the file is still open after the"
+                        + " image and reader were released, so it cannot be deleted or overwritten: " + e);
             }
             return "wrote and read " + SIZE + " x " + SIZE + " float values (" + bytes
                     + " bytes), all identical; " + epsgText;

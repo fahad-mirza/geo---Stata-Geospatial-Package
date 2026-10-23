@@ -152,6 +152,13 @@ A jar stays loaded for the whole Stata session: always restart Stata after repla
   into Java's temporary folder (`java.io.tmpdir`) and loads it from there. A locked-down machine
   that blocks loading code from the temporary folder would break vector features; the dependency
   check reports the folder used.
+- **Release every raster you read** with `Coverages.release(coverage)` in a finally block, then
+  `reader.dispose()`. GeoTools' `GeoTiffReader.read()` gives the returned image its own file
+  handle, which neither `reader.dispose()` nor `GridCoverage2D.dispose(true)` closes; only
+  `ImageUtilities.disposePlanarImageChain` does (GeoTools 35.2 source). Found by the Windows CI
+  failure of 23 Oct 2026: on Windows an open file cannot be deleted or overwritten, so a leaked
+  handle would lock the user's raster while Stata runs. The GeoTIFF round-trip test deletes its file
+  afterwards to keep proving this on every Windows runner.
 - **Return codes.** 198 for bad arguments, 5100 (Stata's own code for a Java exception) for
   failures; see `ReturnCodes.java`.
 - **Stata's real constants** (recorded by check_stubs.do, 23 Oct 2026): Data.TYPE_BYTE 1, INT 2,
