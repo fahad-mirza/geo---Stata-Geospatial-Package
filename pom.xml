@@ -42,6 +42,9 @@
 
     <!-- Library versions -->
     <geotools.version>35.2</geotools.version>
+    <!-- DuckDB JDBC driver. 1.5.6.0 (28 Sep 2026) rather than 2.0.0.0, which was tagged on 21 Oct
+         2026: new releases wait at least two weeks before geo adopts them. -->
+    <duckdb.version>1.5.6.0</duckdb.version>
     <junit.version>5.14.4</junit.version>
 
     <!-- Plugin versions (pinned so every runner builds identically) -->
@@ -98,8 +101,7 @@
 
       <!--
         GeoTools bill of materials. GeoTools 34+ publishes gt-bom so that modules can be listed
-        without version numbers. No GeoTools module is used yet: Phase 0 task 3 adds the first one
-        (the GeoTIFF reader). Importing it now proves the OSGeo repository is reachable from CI.
+        without version numbers. geo-io uses gt-geotiff and gt-epsg-hsql from Phase 0 task 3.
         Source: GeoTools user guide, "Maven Bill of Materials" and "Building FAQ".
       -->
       <dependency>
@@ -108,6 +110,24 @@
         <version>${geotools.version}</version>
         <type>pom</type>
         <scope>import</scope>
+      </dependency>
+
+      <!--
+        DuckDB JDBC driver. The main jar bundles native engines for Linux x64 and ARM64, macOS
+        (universal) and Windows x64. Windows on ARM64 ships as a separate "classifier" jar, which
+        geo-io adds so geo.jar covers all six CI platforms.
+        Source: duckdb-java scripts/jdbc_maven_deploy.py at tag v1.5.6.0.
+      -->
+      <dependency>
+        <groupId>org.duckdb</groupId>
+        <artifactId>duckdb_jdbc</artifactId>
+        <version>${duckdb.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.duckdb</groupId>
+        <artifactId>duckdb_jdbc</artifactId>
+        <version>${duckdb.version}</version>
+        <classifier>windows_arm64</classifier>
       </dependency>
 
       <!-- JUnit 5 for engine tests -->
@@ -142,6 +162,8 @@
           <configuration>
             <!-- Show full stack traces in the CI log when a test fails. -->
             <trimStackTrace>false</trimStackTrace>
+            <!-- No screen on CI runners: Java's image classes must run without one. -->
+            <argLine>-Djava.awt.headless=true</argLine>
           </configuration>
         </plugin>
         <plugin>

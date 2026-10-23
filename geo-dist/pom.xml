@@ -114,18 +114,16 @@
               </filters>
 
               <!--
-                Rule 1: relocations. Each entry is a library family that is pure Java.
-                The skeleton bundles no third-party library yet, so these rename nothing today;
-                they are in place so Phase 0 task 3 (first GeoTools and DuckDB calls) is shaded
-                correctly from its first build.
+                Rule 1: relocations. Each entry is a pure-Java library family.
 
-                Deliberately ABSENT (rule 2, JNI libraries keep their names): org.duckdb, com.uber.h3core.
+                Never relocated (rule 2, JNI libraries keep their names): org.duckdb, com.uber.h3core.
 
-                Deliberately DEFERRED (see DEV_NOTES.md, "Proposed amendment: GeoTools-family
-                relocation"): org.geotools, org.eclipse.imagen, it.geosolutions. Their ImageN
-                registry files name classes in plain text, and the AppendingTransformer copies that
-                text unchanged (checked in the Shade plugin 3.6.1 source), so relocating these
-                packages would leave the registry pointing at class names that no longer exist.
+                Not relocated BY DECISION (23 Oct 2026, DEV_NOTES.md "Decisions"): org.geotools,
+                org.eclipse.imagen (ImageN) and it.geosolutions (ImageIO-Ext). Their ImageN registry
+                files name classes in plain text, and the AppendingTransformer copies that text
+                unchanged (Shade plugin 3.6.1 source), so renaming these packages would break the
+                registry. Stata does not bundle them, so they cannot collide with Stata's own jars.
+                Also left at original names: org.hsqldb (the EPSG database engine; not bundled by Stata).
               -->
               <relocations>
                 <!-- Bundled by Stata in libdeps-core.jar (round 1); GeoTools depends on Apache Commons -->

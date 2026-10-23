@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   geo-io: reading and writing spatial data, with no Stata dependency.
-  Planned contents: GeoTIFF reading through GeoTools (Phase 0 task 3 adds gt-geotiff, versioned by
-  the GeoTools BOM in the parent pom), vector reading through DuckDB's spatial extension, and WKB
-  (the standard binary geometry format) encoding and decoding.
+  Phase 0 task 3 adds the first libraries: GeoTools' GeoTIFF module and EPSG database (versions
+  from the GeoTools BOM in the parent pom) and the DuckDB JDBC driver. Later: DuckDB's spatial
+  extension for vectors, and WKB (the standard binary geometry format) encoding and decoding.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -21,6 +21,26 @@
     <dependency>
       <groupId>org.fahadmirza.geo</groupId>
       <artifactId>geo-core</artifactId>
+    </dependency>
+    <!-- GeoTIFF reading and writing (brings gt-coverage, gt-referencing, ImageN, ImageIO-Ext, JTS) -->
+    <dependency>
+      <groupId>org.geotools</groupId>
+      <artifactId>gt-geotiff</artifactId>
+    </dependency>
+    <!-- The EPSG database of coordinate systems (EPSG:4326 and so on), stored in HSQLDB -->
+    <dependency>
+      <groupId>org.geotools</groupId>
+      <artifactId>gt-epsg-hsql</artifactId>
+    </dependency>
+    <!-- DuckDB: main jar plus the Windows ARM64 native library -->
+    <dependency>
+      <groupId>org.duckdb</groupId>
+      <artifactId>duckdb_jdbc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.duckdb</groupId>
+      <artifactId>duckdb_jdbc</artifactId>
+      <classifier>windows_arm64</classifier>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>

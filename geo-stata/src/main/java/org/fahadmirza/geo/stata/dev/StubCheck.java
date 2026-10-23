@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
+import org.fahadmirza.geo.stata.ReturnCodes;
 import org.fahadmirza.geo.stata.dev.CheckRow.Verdict;
 
 /**
@@ -46,7 +47,7 @@ public final class StubCheck {
     public static int run(String[] args) {
         if (args == null || args.length < 2) {
             SFIToolkit.errorln("StubCheck needs two arguments: the path to sfi-stub.jar and the report file");
-            return 198;
+            return ReturnCodes.SYNTAX;
         }
         try {
             List<CheckRow> rows = execute(new File(args[0]), StubCheck.class.getClassLoader());
@@ -58,7 +59,7 @@ public final class StubCheck {
             return 0;
         } catch (Exception e) {
             SFIToolkit.errorln("StubCheck failed: " + SFIToolkit.stackTraceToString(e));
-            return 498;
+            return ReturnCodes.JAVA_EXCEPTION;
         }
     }
 
@@ -118,7 +119,8 @@ public final class StubCheck {
         return names;
     }
 
-    static void writeReport(List<CheckRow> rows, File out) throws IOException {
+    /** Writes the tab-separated report read by the check do-files. */
+    public static void writeReport(List<CheckRow> rows, File out) throws IOException {
         File parent = out.getAbsoluteFile().getParentFile();
         if (parent != null) {
             Files.createDirectories(parent.toPath());

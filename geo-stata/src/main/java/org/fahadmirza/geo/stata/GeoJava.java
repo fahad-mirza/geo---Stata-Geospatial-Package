@@ -10,9 +10,6 @@ import org.fahadmirza.geo.core.GeoVersion;
  * <p>Output goes through SFIToolkit on the main thread only.
  */
 public final class GeoJava {
-    /** Stata return code for "Java error" style failures raised by geo. */
-    static final int RC_JAVA_FAILURE = 498;
-
     private GeoJava() {
     }
 
@@ -32,7 +29,7 @@ public final class GeoJava {
             return 0;
         } catch (RuntimeException e) {
             SFIToolkit.errorln("geo version failed: " + e);
-            return RC_JAVA_FAILURE;
+            return ReturnCodes.JAVA_EXCEPTION;
         }
     }
 }

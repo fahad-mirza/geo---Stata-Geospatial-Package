@@ -89,6 +89,23 @@ jobs:
             echo "FAIL: signature files found inside geo.jar"; fail=1; fi
           if grep -Eq '^org/fahadmirza/geo/shaded/(org/duckdb|com/uber/h3core)/' jar-contents.txt; then
             echo "FAIL: a JNI library (DuckDB or H3) was relocated; native loading would break"; fail=1; fi
+          # Libraries Stata also bundles must exist only under the relocation prefix.
+          for pkg in org/apache/commons org/apache/fontbox org/slf4j; do
+            if grep -q "^$pkg/" jar-contents.txt; then
+              echo "FAIL: $pkg is inside geo.jar without relocation; Stata's copy would win"; fail=1; fi
+          done
+          # Phase 0 task 3 libraries, at their expected (original) names.
+          for entry in org/duckdb/DuckDBDriver.class \
+                       org/geotools/gce/geotiff/GeoTiffReader.class \
+                       META-INF/services/org.geotools.coverage.grid.io.GridFormatFactorySpi \
+                       libduckdb_java.so_windows_amd64 libduckdb_java.so_windows_arm64 \
+                       libduckdb_java.so_linux_amd64 libduckdb_java.so_linux_arm64 \
+                       libduckdb_java.so_osx_universal; do
+            grep -qx "$entry" jar-contents.txt || { echo "FAIL: $entry is missing from geo.jar"; fail=1; }
+          done
+          for reg in META-INF/registryFile.imagen META-INF/org.eclipse.imagen.registryFile.imagen; do
+            if grep -qx "$reg" jar-contents.txt; then echo "present: $reg"; else echo "note: $reg not in geo.jar"; fi
+          done
           echo "geo.jar: $(wc -l < jar-contents.txt | tr -d ' ') entries, $(wc -c < "$JAR" | tr -d ' ') bytes"
           if [ "$fail" -ne 0 ]; then exit 1; fi
           echo "PASS: geo.jar contents follow the packaging rules"
