@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  geo: a Stata geospatial package built on Stata's Java bridge (the Stata Function Interface, SFI).
+
+  This is the parent ("reactor") build file. It fixes the Java level, every plugin version and the
+  GeoTools bill of materials (BOM: one file that pins the versions of all GeoTools modules), and lists
+  the modules in dependency order. Each module depends only on modules listed above it.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>org.fahadmirza.geo</groupId>
+  <artifactId>geo-parent</artifactId>
+  <version>0.0.1-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <name>geo (parent)</name>
+  <description>Stata geospatial package: rasters and vector boundaries to analysis variables, via Java and SFI.</description>
+
+  <modules>
+    <module>sfi-stub</module>      <!-- compile-only stand-ins for com.stata.sfi; never shipped -->
+    <module>geo-core</module>      <!-- thread pool, chunking, tolerances, missing-value codes -->
+    <module>geo-io</module>        <!-- GeoTIFF (GeoTools), vector (DuckDB), WKB -->
+    <module>geo-analysis</module>  <!-- zonal statistics, extraction, coverage fractions -->
+    <module>geo-stata</module>     <!-- the ONLY module that calls com.stata.sfi -->
+    <module>geo-dist</module>      <!-- Maven Shade build that produces geo.jar -->
+  </modules>
+
+  <properties>
+    <!-- Java 17 bytecode and Java 17 API only, whatever JDK runs the build (locked decision). -->
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+    <!-- Fixed timestamp inside the jars so two builds of the same code give byte-identical jars. -->
+    <project.build.outputTimestamp>2026-10-23T00:00:00Z</project.build.outputTimestamp>
+
+    <!-- Build identifier written into geo.jar. CI overrides it with the Git commit id. -->
+    <geo.build>local</geo.build>
+
+    <!-- Library versions -->
+    <geotools.version>35.2</geotools.version>
+    <junit.version>5.14.4</junit.version>
+
+    <!-- Plugin versions (pinned so every runner builds identically) -->
+    <plugin.compiler.version>3.14.1</plugin.compiler.version>
+    <plugin.surefire.version>3.6.0</plugin.surefire.version>
+    <plugin.jar.version>3.4.2</plugin.jar.version>
+    <plugin.resources.version>3.3.1</plugin.resources.version>
+    <plugin.shade.version>3.6.1</plugin.shade.version>
+    <plugin.enforcer.version>3.6.2</plugin.enforcer.version>
+  </properties>
+
+  <!--
+    GeoTools is published to the OSGeo repository, not (fully) to Maven Central.
+    Source: GeoTools user guide, "Remote Repositories".
+  -->
+  <repositories>
+    <repository>
+      <id>osgeo</id>
+      <name>OSGeo Release Repository</name>
+      <url>https://repo.osgeo.org/repository/release/</url>
+      <snapshots><enabled>false</enabled></snapshots>
+      <releases><enabled>true</enabled></releases>
+    </repository>
+  </repositories>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- Our own modules -->
+      <dependency>
+        <groupId>org.fahadmirza.geo</groupId>
+        <artifactId>sfi-stub</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.fahadmirza.geo</groupId>
+        <artifactId>geo-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.fahadmirza.geo</groupId>
+        <artifactId>geo-io</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.fahadmirza.geo</groupId>
+        <artifactId>geo-analysis</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.fahadmirza.geo</groupId>
+        <artifactId>geo-stata</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <!--
+        GeoTools bill of materials. GeoTools 34+ publishes gt-bom so that modules can be listed
+        without version numbers. No GeoTools module is used yet: Phase 0 task 3 adds the first one
+        (the GeoTIFF reader). Importing it now proves the OSGeo repository is reachable from CI.
+        Source: GeoTools user guide, "Maven Bill of Materials" and "Building FAQ".
+      -->
+      <dependency>
+        <groupId>org.geotools</groupId>
+        <artifactId>gt-bom</artifactId>
+        <version>${geotools.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- JUnit 5 for engine tests -->
+      <dependency>
+        <groupId>org.junit</groupId>
+        <artifactId>junit-bom</artifactId>
+        <version>${junit.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>${plugin.compiler.version}</version>
+          <configuration>
+            <release>${maven.compiler.release}</release>
+            <compilerArgs>
+              <arg>-Xlint:all,-processing,-serial,-options</arg>
+            </compilerArgs>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>${plugin.surefire.version}</version>
+          <configuration>
+            <!-- Show full stack traces in the CI log when a test fails. -->
+            <trimStackTrace>false</trimStackTrace>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-jar-plugin</artifactId>
+          <version>${plugin.jar.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-resources-plugin</artifactId>
+          <version>${plugin.resources.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-shade-plugin</artifactId>
+          <version>${plugin.shade.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-enforcer-plugin</artifactId>
+          <version>${plugin.enforcer.version}</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+
+    <plugins>
+      <!-- Fail early and clearly if the build runs on a JDK older than 17 or an old Maven. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>enforce-toolchain</id>
+            <goals><goal>enforce</goal></goals>
+            <configuration>
+              <rules>
+                <requireJavaVersion><version>[17,)</version></requireJavaVersion>
+                <requireMavenVersion><version>[3.9,)</version></requireMavenVersion>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  geo-io: reading and writing spatial data, with no Stata dependency.
+  Planned contents: GeoTIFF reading through GeoTools (Phase 0 task 3 adds gt-geotiff, versioned by
+  the GeoTools BOM in the parent pom), vector reading through DuckDB's spatial extension, and WKB
+  (the standard binary geometry format) encoding and decoding.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.fahadmirza.geo</groupId>
+    <artifactId>geo-parent</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+  </parent>
+  <artifactId>geo-io</artifactId>
+  <name>geo-io (reading rasters and vectors)</name>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.fahadmirza.geo</groupId>
+      <artifactId>geo-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>

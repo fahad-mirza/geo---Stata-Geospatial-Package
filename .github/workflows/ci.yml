@@ -1,0 +1,125 @@
+# ci: builds geo.jar and runs the Java tests on Windows, macOS and Linux, on Intel/AMD (x64) and
+# ARM (ARM64) chips. Runs on every push to main, on pull requests, and on demand from the Actions
+# page ("Run workflow" button).
+#
+# Each runner: checks out the code, installs Azul Zulu JDK (the same Java distribution Stata
+# bundles), builds and tests everything with the Maven Wrapper (mvnw), then inspects geo.jar.
+# One runner (Windows x64, Java 21, closest to Stata 19.5 on Windows) uploads the jar as the
+# downloadable artifact "geo-jar".
+#
+# Runner names and free use on public repositories: GitHub docs, "GitHub-hosted runners reference".
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.label }} / Java ${{ matrix.java }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest,   label: Windows x64,   java: '21', publish: true }
+          - { os: windows-latest,   label: Windows x64,   java: '17' }
+          - { os: windows-11-arm,   label: Windows ARM64, java: '21' }
+          - { os: ubuntu-latest,    label: Linux x64,     java: '21' }
+          - { os: ubuntu-latest,    label: Linux x64,     java: '17' }
+          - { os: ubuntu-24.04-arm, label: Linux ARM64,   java: '21' }
+          - { os: macos-latest,     label: macOS ARM64,   java: '21' }
+          - { os: macos-15-intel,   label: macOS x64,     java: '21' }
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6.1.0
+
+      - name: Install Java ${{ matrix.java }} (Azul Zulu, as bundled with Stata)
+        uses: actions/setup-java@v6.0.1
+        with:
+          distribution: zulu
+          java-version: ${{ matrix.java }}
+          cache: maven
+
+      - name: Show the build machine
+        shell: bash
+        run: |
+          echo "Runner: ${{ matrix.label }} (${{ runner.os }} ${{ runner.arch }})"
+          java -version
+
+      # mvnw is run through "sh" because files committed from Windows lose the "executable" flag.
+      - name: Build and test (Linux, macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: sh ./mvnw --batch-mode --no-transfer-progress verify "-Dgeo.build=${{ github.sha }}"
+
+      - name: Build and test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\mvnw.cmd --batch-mode --no-transfer-progress verify "-Dgeo.build=${{ github.sha }}"
+
+      # Enforces the packaging rules on the finished jar, on every runner.
+      - name: Check geo.jar contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAR=geo-dist/target/geo.jar
+          test -f "$JAR" || { echo "FAIL: $JAR was not built"; exit 1; }
+          jar tf "$JAR" > jar-contents.txt
+          fail=0
+          grep -q '^org/fahadmirza/geo/stata/GeoJava.class$' jar-contents.txt \
+            || { echo "FAIL: entry point org.fahadmirza.geo.stata.GeoJava is missing"; fail=1; }
+          grep -q '^org/fahadmirza/geo/core/geo-build.properties$' jar-contents.txt \
+            || { echo "FAIL: geo-build.properties is missing"; fail=1; }
+          if grep -q '^com/stata/' jar-contents.txt; then
+            echo "FAIL: StataCorp classes (com/stata/) found inside geo.jar"; fail=1; fi
+          if grep -Eq '^META-INF/[^/]+\.(SF|DSA|RSA|EC)$' jar-contents.txt; then
+            echo "FAIL: signature files found inside geo.jar"; fail=1; fi
+          if grep -Eq '^org/fahadmirza/geo/shaded/(org/duckdb|com/uber/h3core)/' jar-contents.txt; then
+            echo "FAIL: a JNI library (DuckDB or H3) was relocated; native loading would break"; fail=1; fi
+          echo "geo.jar: $(wc -l < jar-contents.txt | tr -d ' ') entries, $(wc -c < "$JAR" | tr -d ' ') bytes"
+          if [ "$fail" -ne 0 ]; then exit 1; fi
+          echo "PASS: geo.jar contents follow the packaging rules"
+
+      # Copy the deliverables into one flat folder so the downloaded zip has no subfolders.
+      - name: Collect the files to publish
+        if: matrix.publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifact
+          cp geo-dist/target/geo.jar sfi-stub/target/sfi-stub.jar artifact/
+          {
+            echo "geo build information"
+            echo "commit:  ${{ github.sha }}"
+            echo "run:     ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "built:   $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo "runner:  ${{ matrix.label }}, Java ${{ matrix.java }}"
+            echo ""
+            echo "geo.jar       the package's Java engine; Stata loads it with javacall"
+            echo "sfi-stub.jar  used only by tests/stata/check_stubs.do; never put it on Stata's ado-path"
+            echo ""
+            echo "A jar stays loaded for the whole Stata session: restart Stata after replacing geo.jar."
+          } > artifact/BUILD-INFO.txt
+          ls -l artifact
+
+      - name: Upload geo.jar as the "geo-jar" artifact
+        if: matrix.publish
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: geo-jar
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 30

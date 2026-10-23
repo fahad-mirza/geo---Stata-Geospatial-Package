@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  geo-dist: builds the single jar Stata loads, geo.jar, with the Maven Shade plugin.
+
+  "Shading" copies every dependency into one jar. "Relocating" also renames a library's packages
+  (org.apache.commons becomes org.fahadmirza.geo.shaded.org.apache.commons) and rewrites every
+  reference to them. Round 2 showed why: javacall loads parent-first, so when Stata already ships a
+  library (Apache Commons, SLF4J, FontBox in libdeps-core.jar), Stata's copy always wins. Renaming
+  our copy means the two can no longer collide.
+
+  Rules (foundation specification, packaging row):
+   1. Relocate pure-Java libraries under org.fahadmirza.geo.shaded.
+   2. NEVER relocate libraries that call native code through JNI (Java Native Interface):
+      DuckDB (org.duckdb) and H3 (com.uber.h3core). Their native code looks Java classes up by
+      their original names, so renamed classes fail to load. CI fails the build if either ever
+      appears under the shaded prefix.
+   3. Merge META-INF/services files (ServicesResourceTransformer) and the two ImageN registry files
+      (AppendingTransformer), as the GeoTools Building FAQ prescribes, instead of letting one
+      jar's copy overwrite the others.
+   4. Drop signature files (META-INF/*.SF, *.DSA, *.RSA): a merged jar can never match the
+      original signatures, and a stale signature makes Java refuse to load the jar.
+   5. Never ship com.stata.sfi: sfi-stub has "provided" scope (never packaged) and a filter below
+      removes the package as a second guard.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.fahadmirza.geo</groupId>
+    <artifactId>geo-parent</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+  </parent>
+  <artifactId>geo-dist</artifactId>
+  <name>geo-dist (builds geo.jar)</name>
+
+  <properties>
+    <shade.prefix>org.fahadmirza.geo.shaded</shade.prefix>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.fahadmirza.geo</groupId>
+      <artifactId>geo-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.fahadmirza.geo</groupId>
+      <artifactId>geo-io</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.fahadmirza.geo</groupId>
+      <artifactId>geo-analysis</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.fahadmirza.geo</groupId>
+      <artifactId>geo-stata</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <!-- The output is geo-dist/target/geo.jar -->
+    <finalName>geo</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <configuration>
+          <archive>
+            <manifestEntries>
+              <Implementation-Title>geo (Stata geospatial package)</Implementation-Title>
+              <Implementation-Version>${project.version}</Implementation-Version>
+              <Geo-Build>${geo.build}</Geo-Build>
+            </manifestEntries>
+          </archive>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals><goal>shade</goal></goals>
+            <configuration>
+              <!-- Replace geo.jar with the shaded jar; do not write dependency-reduced-pom.xml
+                   into the source folder (it would show up as a stray change in GitHub Desktop). -->
+              <shadedArtifactAttached>false</shadedArtifactAttached>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+
+              <artifactSet>
+                <excludes>
+                  <!-- Rule 5, first guard: StataCorp's API stand-ins are never shipped. -->
+                  <exclude>org.fahadmirza.geo:sfi-stub</exclude>
+                </excludes>
+              </artifactSet>
+
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <!-- Rule 4: signature files -->
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>META-INF/*.EC</exclude>
+                    <!-- Java module descriptors of dependencies are meaningless in a merged jar -->
+                    <exclude>module-info.class</exclude>
+                    <exclude>META-INF/versions/*/module-info.class</exclude>
+                    <!-- Rule 5, second guard -->
+                    <exclude>com/stata/**</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+
+              <!--
+                Rule 1: relocations. Each entry is a library family that is pure Java.
+                The skeleton bundles no third-party library yet, so these rename nothing today;
+                they are in place so Phase 0 task 3 (first GeoTools and DuckDB calls) is shaded
+                correctly from its first build.
+
+                Deliberately ABSENT (rule 2, JNI libraries keep their names): org.duckdb, com.uber.h3core.
+
+                Deliberately DEFERRED (see DEV_NOTES.md, "Proposed amendment: GeoTools-family
+                relocation"): org.geotools, org.eclipse.imagen, it.geosolutions. Their ImageN
+                registry files name classes in plain text, and the AppendingTransformer copies that
+                text unchanged (checked in the Shade plugin 3.6.1 source), so relocating these
+                packages would leave the registry pointing at class names that no longer exist.
+              -->
+              <relocations>
+                <!-- Bundled by Stata in libdeps-core.jar (round 1); GeoTools depends on Apache Commons -->
+                <relocation>
+                  <pattern>org.apache.commons</pattern>
+                  <shadedPattern>${shade.prefix}.org.apache.commons</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.fontbox</pattern>
+                  <shadedPattern>${shade.prefix}.org.apache.fontbox</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.slf4j</pattern>
+                  <shadedPattern>${shade.prefix}.org.slf4j</shadedPattern>
+                </relocation>
+                <!-- JTS geometry library (pure Java, used by GeoTools and by geo for WKB) -->
+                <relocation>
+                  <pattern>org.locationtech.jts</pattern>
+                  <shadedPattern>${shade.prefix}.org.locationtech.jts</shadedPattern>
+                </relocation>
+                <!-- Units-of-measure libraries used by GeoTools' coordinate systems (pure Java) -->
+                <relocation>
+                  <pattern>javax.measure</pattern>
+                  <shadedPattern>${shade.prefix}.javax.measure</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>tech.units</pattern>
+                  <shadedPattern>${shade.prefix}.tech.units</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>si.uom</pattern>
+                  <shadedPattern>${shade.prefix}.si.uom</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>systems.uom</pattern>
+                  <shadedPattern>${shade.prefix}.systems.uom</shadedPattern>
+                </relocation>
+              </relocations>
+
+              <transformers>
+                <!-- Rule 3: merge META-INF/services files and relocate the class names inside them -->
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                <!-- Rule 3: merge the two ImageN registry files (GeoTools Building FAQ) -->
+                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                  <resource>META-INF/org.eclipse.imagen.registryFile.imagen</resource>
+                </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                  <resource>META-INF/registryFile.imagen</resource>
+                </transformer>
+                <!-- Keep the version and build id in geo.jar's manifest -->
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <manifestEntries>
+                    <Implementation-Title>geo (Stata geospatial package)</Implementation-Title>
+                    <Implementation-Version>${project.version}</Implementation-Version>
+                    <Geo-Build>${geo.build}</Geo-Build>
+                  </manifestEntries>
+                </transformer>
+              </transformers>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

@@ -1,2 +1,14 @@
-# Auto detect text files and perform LF normalization
+# Normalise line endings in Git; check out with the platform's convention.
 * text=auto
+
+# Shell script for the Linux and macOS runners must keep Unix line endings.
+mvnw text eol=lf
+*.sh text eol=lf
+# Windows batch script keeps Windows line endings.
+*.cmd text eol=crlf
+
+# Binary files: never touch.
+*.jar binary
+*.tif binary
+*.tiff binary
+*.dta binary

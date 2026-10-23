@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  geo-stata: the ONLY module that calls com.stata.sfi (Stata's Java API).
+  Planned contents: the validated writer (checks ranges and UTF-8 byte widths before every fast
+  store), frame output, the _geometry column, and the javacall entry points used by geo.ado.
+
+  It compiles against sfi-stub with "provided" scope: available while compiling and testing,
+  never packaged. Inside Stata, Stata's own com.stata.sfi classes are loaded instead.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.fahadmirza.geo</groupId>
+    <artifactId>geo-parent</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+  </parent>
+  <artifactId>geo-stata</artifactId>
+  <name>geo-stata (Stata-facing layer)</name>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.fahadmirza.geo</groupId>
+      <artifactId>sfi-stub</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.fahadmirza.geo</groupId>
+      <artifactId>geo-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.fahadmirza.geo</groupId>
+      <artifactId>geo-io</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.fahadmirza.geo</groupId>
+      <artifactId>geo-analysis</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>

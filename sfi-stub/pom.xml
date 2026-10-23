@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  sfi-stub: compile-only stand-ins for StataCorp's com.stata.sfi classes.
+
+  StataCorp's sfi-api.jar is never committed to this public repository. These classes copy the
+  method signatures of the parts of com.stata.sfi the package uses (from the official Stata 19 Java
+  API pages), and every body throws. geo-stata compiles against this module with "provided" scope,
+  so it is never bundled into geo.jar; inside Stata the real classes are always the ones loaded.
+  tests/stata/check_stubs.do confirms every stubbed member exists in the real API.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.fahadmirza.geo</groupId>
+    <artifactId>geo-parent</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+  </parent>
+  <artifactId>sfi-stub</artifactId>
+  <name>sfi-stub (compile-only stand-ins for com.stata.sfi)</name>
+
+  <build>
+    <!-- Fixed file name: CI uploads sfi-stub.jar next to geo.jar for the Stata-side stub check. -->
+    <finalName>sfi-stub</finalName>
+  </build>
+</project>

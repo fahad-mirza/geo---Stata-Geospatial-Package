@@ -1,0 +1,22 @@
+# Build output
+target/
+dependency-reduced-pom.xml
+*.class
+artifact/
+jar-contents.txt
+
+# Never commit jars: geo.jar comes from GitHub Actions, and StataCorp's sfi-api.jar must never
+# enter this public repository.
+*.jar
+
+# Stata logs written by the check do-files (paste them into the conversation instead)
+*.log
+*.smcl
+
+# Editors and operating systems
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini

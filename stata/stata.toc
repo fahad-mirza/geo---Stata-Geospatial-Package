@@ -1,0 +1,3 @@
+v 3
+d geo: geospatial analysis for Stata (development)
+p geo Geospatial analysis: rasters and vector boundaries to analysis variables

@@ -1,0 +1,8 @@
+v 3
+d 'GEO': geospatial analysis for Stata (rasters, vector boundaries, zonal statistics)
+d Development skeleton: only "geo version" works.
+d Java engine called through Stata's Java integration; requires Java 17 or later.
+d Distribution-Date: 20261023
+d Author: Fahad Mirza
+f geo.ado
+f geo.sthlp
